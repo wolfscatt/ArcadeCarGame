@@ -140,12 +140,12 @@ public class CarController : MonoBehaviour
             {
                 wheelsIsGrounded[i] = 1;
 
-                float currentSpringLenght = restLength - (hit.distance - wheelRadius);
+                float currentSpringLenght = hit.distance - maxLength;
                 float springCompression = (restLength - currentSpringLenght) / springTravel;
                 float springVelocity = Vector3.Dot(carRb.GetPointVelocity(rayPoints[i].position), rayPoints[i].up);
                 float damperForce = damperStiffness * springVelocity;
                 float springForce = springCompression * springStiffness;
-                float netForce = (springForce - damperForce) * Mathf.Sign(springCompression);
+                float netForce = springForce - damperForce;
                 carRb.AddForceAtPosition(netForce * rayPoints[i].up, rayPoints[i].position);
 
                 Debug.DrawLine(rayPoints[i].position, hit.point, Color.red);

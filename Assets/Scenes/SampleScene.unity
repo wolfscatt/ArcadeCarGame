@@ -832,7 +832,7 @@ Transform:
   m_GameObject: {fileID: 1153576297}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 1.09, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -863,11 +863,11 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 64
   accelerationPoint: {fileID: 679812898}
-  springStiffness: 30000
-  damperStiffness: 5000
+  springStiffness: 15000
+  damperStiffness: 8000
   restLength: 0.5
   springTravel: 0.25
-  wheelRadius: 0.33
+  wheelRadius: 0.22
   acceleration: 25
   maxSpeed: 100
   deceleration: 10
