@@ -1,164 +1,167 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class CarController : MonoBehaviour
 {
-    [Header("References")]
-    [SerializeField] private Rigidbody carRb;
-    [SerializeField] private Transform[] rayPoints;
-    [SerializeField] private LayerMask drivableLayer;
-    [SerializeField] private Transform accelerationPoint;
+    public enum ControlMode
+    {
+        Keyboard,
+        Mobile
+    }
+    public enum Axel
+    {
+        Front,
+        Rear
+    }
 
+    [Serializable]
+    public struct Wheel
+    {
+        public GameObject wheelModel;
+        public WheelCollider wheelCollider;
+        public GameObject wheelEffectObj;
+        public ParticleSystem smokeParticle;
+        public Axel axel;
+    }
 
-    [Header("Suspension Settings")]
-    [SerializeField] private float springStiffness;
-    [SerializeField] private float damperStiffness;
-    [SerializeField] private float restLength;
-    [SerializeField] private float springTravel;
-    [SerializeField] private float wheelRadius;
+    public ControlMode controlMode;
 
-    private int[] wheelsIsGrounded = new int[4];
-    private bool isGrounded = false;
+    public float maxAcceleration = 30f;
+    public float brakeAcceleration = 50f;
+    public float moveTorque = 600f;
+    public float brakeTorque = 300f;
 
-    [Header("Inputs")]
-    private float moveInput = 0;
-    private float steerInput = 0;
+    public float turnSenstivity = 1f;
+    public float maxSteerAngle = 30f;
+    public Vector3 centerOfMass;
 
-    [Header("Car Settings")]
-    [SerializeField] private float acceleration = 25f;
-    [SerializeField] private float maxSpeed = 100f;
-    [SerializeField] private float deceleration = 10f;
-    [SerializeField] private float steerStrength = 15f;
-    [SerializeField] private AnimationCurve turningCurve;
-    [SerializeField] private float dragCoefficient = 1f;
+    public List<Wheel> wheels;
 
-    private Vector3 currentCarLocalVelocity = Vector3.zero;
-    private float carVelocityRatio = 0;
+    private float moveInput;
+    private float steerInput;
+    private bool isBraking;
 
+    private Rigidbody carRb;
 
-    private void Start() {
+    private CarLights carLights;
+
+    private void Start()
+    {
         carRb = GetComponent<Rigidbody>();
+        carRb.centerOfMass = centerOfMass;
+
+        carLights = GetComponent<CarLights>();
+    }
+    private void Update()
+    {
+        GetInputs();
+        AnimateWheels();
+        WheelEffect();
     }
 
-    private void FixedUpdate() 
+    private void FixedUpdate()
     {
-        Suspension();
-        GroundCheck();
-        CalculateCarVelocity();
-        Movement();
+        Move();
+        Steer();
+        Brake();
     }
 
-    private void Update() 
+    public void MoveInput(float input)
     {
-        GetPlayerInput();
+        moveInput = input;
+    }
+    public void SteerInput(float input)
+    {
+        steerInput = input;
     }
 
-    #region Car Movement
-
-    private void Movement()
+    public void HandBrakeInput(bool input)
     {
-        if(isGrounded)
+        Debug.Log("Handbrake:" + input);
+        isBraking = input;
+    }
+
+    private void GetInputs()
+    {
+        if (controlMode == ControlMode.Keyboard)
         {
-            Acceleration();
-            Deceleration();
-            Turn();
-            SidewaysDrag();
+            moveInput = Input.GetAxis("Vertical");
+            steerInput = Input.GetAxis("Horizontal");
         }
-       
     }
 
-    private void Acceleration()
+    private void Move()
     {
-        carRb.AddForceAtPosition(acceleration * moveInput * transform.forward, accelerationPoint.position, ForceMode.Acceleration);
-    }
-    private void Deceleration()
-    {
-        carRb.AddForceAtPosition(deceleration * moveInput * -transform.forward, accelerationPoint.position, ForceMode.Acceleration);
-    }
-
-    private void Turn()
-    {
-        carRb.AddRelativeTorque (steerStrength * steerInput * turningCurve.Evaluate(Mathf.Abs(carVelocityRatio)) * Mathf.Sign(carVelocityRatio) * transform.up, ForceMode.Acceleration);
-    }
-
-    private void SidewaysDrag()
-    {
-        float currentSidewaysSpeed = currentCarLocalVelocity.x;
-        float dragMagnitude = -currentSidewaysSpeed * dragCoefficient;
-        Vector3 dragForce = dragMagnitude * transform.right;
-
-        carRb.AddForceAtPosition(dragForce, carRb.worldCenterOfMass, ForceMode.Acceleration);
-    }
-
-    #endregion
-
-    #region Car Status Check 
-    private void GroundCheck()
-    {
-        int tempGroundedWheels = 0;
-        for (int i = 0; i < wheelsIsGrounded.Length; i++)
+        foreach (var wheel in wheels)
         {
-            tempGroundedWheels += wheelsIsGrounded[i];
+            wheel.wheelCollider.motorTorque = moveInput * maxAcceleration * Time.deltaTime * moveTorque;
         }
-        if(tempGroundedWheels > 1)
+    }
+
+    private void Steer()
+    {
+        foreach (var wheel in wheels)
         {
-            isGrounded = true;
+            if (wheel.axel == Axel.Front)
+            {
+                var steerAngle = steerInput * maxSteerAngle * turnSenstivity;
+                wheel.wheelCollider.steerAngle = Mathf.Lerp(wheel.wheelCollider.steerAngle, steerAngle, 0.6f);
+            }
+        }
+    }
+
+    private void Brake()
+    {
+        if (Input.GetKey(KeyCode.Space) || moveInput == 0 || isBraking)
+        {
+            foreach (var wheel in wheels)
+            {
+                wheel.wheelCollider.brakeTorque = brakeTorque * brakeAcceleration * Time.deltaTime;
+
+            }
+            carLights.isBackLightOn = true;
+            carLights.OperateBackLights();
         }
         else
         {
-            isGrounded = false;
+            foreach (var wheel in wheels)
+            {
+                wheel.wheelCollider.brakeTorque = 0;
+            }
+            carLights.isBackLightOn = false;
+            carLights.OperateBackLights();
+        }
+
+    }
+
+    private void AnimateWheels()
+    {
+        foreach (var wheel in wheels)
+        {
+            Quaternion rot;
+            Vector3 pos;
+            wheel.wheelCollider.GetWorldPose(out pos, out rot);
+            wheel.wheelModel.transform.position = pos;
+            wheel.wheelModel.transform.rotation = rot;
         }
     }
 
-    private void CalculateCarVelocity()
+    private void WheelEffect()
     {
-        currentCarLocalVelocity = transform.InverseTransformDirection(carRb.velocity);
-        carVelocityRatio = currentCarLocalVelocity.z / maxSpeed;
-    }
-
-    #endregion
-
-    #region Input Handling
-    private void GetPlayerInput()
-    {
-        moveInput = Input.GetAxis("Vertical");
-        steerInput = Input.GetAxis("Horizontal");
-    }
-    #endregion
-
-
-    # region Suspension Functions
-    private void Suspension()
-    {
-        for (int i = 0; i < rayPoints.Length; i++)
+        foreach (var wheel in wheels)
         {
-            RaycastHit hit;
-            float maxLength = restLength + springTravel;
-
-            if(Physics.Raycast(rayPoints[i].position, -rayPoints[i].up, out hit, maxLength , drivableLayer))
+            if ((Input.GetKey(KeyCode.Space) || isBraking) && wheel.axel == Axel.Rear && wheel.wheelCollider.isGrounded == true && carRb.velocity.magnitude > 5f)
             {
-                wheelsIsGrounded[i] = 1;
-
-                float currentSpringLenght = hit.distance - maxLength;
-                float springCompression = (restLength - currentSpringLenght) / springTravel;
-                float springVelocity = Vector3.Dot(carRb.GetPointVelocity(rayPoints[i].position), rayPoints[i].up);
-                float damperForce = damperStiffness * springVelocity;
-                float springForce = springCompression * springStiffness;
-                float netForce = springForce - damperForce;
-                carRb.AddForceAtPosition(netForce * rayPoints[i].up, rayPoints[i].position);
-
-                Debug.DrawLine(rayPoints[i].position, hit.point, Color.red);
+                wheel.wheelEffectObj.GetComponentInChildren<TrailRenderer>().emitting = true;
+                wheel.smokeParticle.Emit(1);
             }
             else
             {
-                wheelsIsGrounded[i] = 0;
-                Debug.DrawLine(rayPoints[i].position, rayPoints[i].position +  (wheelRadius + maxLength) * -rayPoints[i].up, Color.green);
+                wheel.wheelEffectObj.GetComponentInChildren<TrailRenderer>().emitting = false;
             }
-            
         }
-
     }
-    #endregion
-
 }
+
